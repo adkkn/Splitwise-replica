@@ -1,56 +1,83 @@
-# Welcome to your Expo app 👋
+# Evenly
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A free bill splitting app for you and your friends, in the spirit of Splitwise.
+Android (APK), iPhone (home screen web app) and browser, all from one codebase.
 
-## Get started
+## Features
 
-1. Install dependencies
+- Sign up with email, add friends by email (they can join later and see everything)
+- Groups (trips, home, couple, anything) and expenses outside groups
+- Split equally, by exact amounts, by percentages or by shares
+- One payer or several people paying for the same expense
+- Any currency per expense (AED, EUR, USD, GBP and more), balances kept per currency
+- Simplify debts per group (fewest payments to settle everyone)
+- Settle up with suggested payments, record any payment
+- Balances per friend (with a per group breakdown) and per group, group totals
+- Activity feed, edit and delete anything, live updates across phones
+- Category auto detection ("Taxi" gets the transport icon), light and dark mode
 
-   ```bash
-   npm install
-   ```
+## One time setup (about 5 minutes)
 
-2. Start the app
+### 1. Create the database (free)
 
-   ```bash
-   npx expo start
-   ```
+1. Go to [supabase.com](https://supabase.com), sign up (the GitHub login is quickest) and click **New project**.
+   Name it `evenly`, pick any password, and choose a region close to you (for example West EU (Ireland)).
+2. When it is ready, open **SQL Editor**, click **New query**, paste the whole of
+   [`supabase/schema.sql`](supabase/schema.sql) and click **Run**. You should see "Success".
+3. Open **Authentication > Sign In / Providers > Email** and turn **off** "Confirm email", then save.
+   (Otherwise every friend has to click an email link, and the free email sender only sends a few per hour.)
+4. Open **Project Settings > API Keys** (and **Data API** for the URL) and copy:
+   - the **Project URL** (looks like `https://abcdxyz.supabase.co`)
+   - the **publishable key** (or the legacy **anon public** key)
 
-In the output, you'll find options to open the app in a
+   These two values are safe to share: the database rules only ever show people their own data.
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+### 2. Connect the app to it
 
-You can start developing by editing the files inside the **src/app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+In GitHub, open the repository's **Settings > Secrets and variables > Actions > Variables** tab and add two
+repository variables:
 
-## Get a fresh project
+| Name | Value |
+| --- | --- |
+| `SUPABASE_URL` | your Project URL |
+| `SUPABASE_KEY` | your publishable / anon key |
 
-When you're ready, run:
+Then go to **Actions > Build apps > Run workflow**. (Or just paste both values to Claude and it will do this part.)
+
+### 3. Get the apps
+
+**Android:** when the build finishes (about 10 minutes), open the repository's **Releases** and download
+`Evenly.apk`. Send that file to your friends (WhatsApp, Drive, anything). On the phone, open it and allow
+"install unknown apps" when asked. New builds install over the old one and keep you logged in.
+
+**iPhone:** Apple does not allow installing app files without a paid developer account, so iPhone users get
+the web version, which looks and works the same:
+
+1. In GitHub, open **Settings > Pages** and set **Source** to **GitHub Actions**.
+   (GitHub Pages needs the repository to be public, or a GitHub Pro account. The code contains no secrets.)
+2. Merge this work into `main`. Every push to `main` publishes the site.
+3. Your friends open `https://<your-github-username>.github.io/<repository-name>/` in **Safari**, tap
+   **Share**, then **Add to Home Screen**. It gets its own icon and opens full screen like a normal app.
+
+If the repository stays private, friends cannot download from Releases themselves, so just share the APK
+file directly.
+
+## Developing
 
 ```bash
-npm run reset-project
+npm install
+npm run web        # run in the browser
+npm test           # money math tests
+npm run typecheck
 ```
 
-This command will move the starter code to the **example** directory and create a blank **src/app** directory where you can start developing.
+Create a `.env.local` file with `EXPO_PUBLIC_SUPABASE_URL=...` and `EXPO_PUBLIC_SUPABASE_KEY=...` to run it
+against your database locally.
 
-### Other setup steps
+## How it works
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+- `src/lib/money.ts`: all the money math, in integer cents (splits, balances, debt simplification)
+- `src/lib/data.tsx`: login, loading data and live updates from Supabase
+- `src/app/`: the screens (Expo Router)
+- `supabase/schema.sql`: tables, security rules and the functions the app calls
+- `.github/workflows/build.yml`: builds the APK and the web app on every push

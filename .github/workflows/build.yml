@@ -1,0 +1,106 @@
+name: Build apps
+
+on:
+  push:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Supabase project details. Set them as repository variables (Settings > Secrets and variables >
+  # Actions > Variables) or put them straight into src/config.ts.
+  EXPO_PUBLIC_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+  EXPO_PUBLIC_SUPABASE_KEY: ${{ vars.SUPABASE_KEY }}
+  EXPO_PUBLIC_WEB_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+  EXPO_PUBLIC_APK_URL: https://github.com/${{ github.repository }}/releases/latest/download/Evenly.apk
+  BUILD_NUMBER: ${{ github.run_number }}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  android:
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - run: npm ci
+      - name: Generate native Android project
+        run: npx expo prebuild --platform android --no-install
+      - name: Build APK
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=armeabi-v7a,arm64-v8a
+      - name: Rename APK
+        run: cp android/app/build/outputs/apk/release/app-release.apk Evenly.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Evenly-android
+          path: Evenly.apk
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Evenly 1.0.${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          files: Evenly.apk
+          body: |
+            Android: download **Evenly.apk** below and open it on your phone (allow "install unknown apps" when asked).
+            iPhone: open ${{ env.EXPO_PUBLIC_WEB_URL }} in Safari, tap Share, then "Add to Home Screen".
+
+  web:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build web app
+        env:
+          EXPO_BASE_URL: /${{ github.event.repository.name }}
+        run: |
+          npx expo export --platform web --output-dir dist
+          node scripts/pwa.mjs dist
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy-web:
+    # GitHub Pages only accepts deployments from the default branch.
+    if: github.ref_name == github.event.repository.default_branch
+    needs: web
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
